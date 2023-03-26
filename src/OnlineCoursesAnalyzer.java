@@ -5,133 +5,131 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * This is just a demo for you, please run it on JDK17 (some statements may be not allowed in lower version).
- * This is just a demo, and you can extend and implement functions
- * based on this demo, or implement it in a different way.
- */
 public class OnlineCoursesAnalyzer {
+  List<Course> courses = new ArrayList<>();
 
-    List<Course> courses = new ArrayList<>();
-
-    public OnlineCoursesAnalyzer(String datasetPath) {
-        BufferedReader br = null;
-        String line;
+  public OnlineCoursesAnalyzer(String datasetPath) {
+    BufferedReader br = null;
+    String line;
+    try {
+      br = new BufferedReader(new FileReader(datasetPath, StandardCharsets.UTF_8));
+      br.readLine();
+      while ((line = br.readLine()) != null) {
+        String[] info = line.split(",(?=([^\\\"]*\\\"[^\\\"]*\\\")*[^\\\"]*$)", -1);
+        Course course = new Course(info[0], info[1], new Date(info[2]), info[3], info[4], info[5],
+                Integer.parseInt(info[6]), Integer.parseInt(info[7]), Integer.parseInt(info[8]),
+                Integer.parseInt(info[9]), Integer.parseInt(info[10]), Double.parseDouble(info[11]),
+                Double.parseDouble(info[12]), Double.parseDouble(info[13]),
+                Double.parseDouble(info[14]),
+                Double.parseDouble(info[15]), Double.parseDouble(info[16]),
+                Double.parseDouble(info[17]),
+                Double.parseDouble(info[18]), Double.parseDouble(info[19]),
+                Double.parseDouble(info[20]),
+                Double.parseDouble(info[21]), Double.parseDouble(info[22]));
+        courses.add(course);
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    } finally {
+      if (br != null) {
         try {
-            br = new BufferedReader(new FileReader(datasetPath, StandardCharsets.UTF_8));
-            br.readLine();
-            while ((line = br.readLine()) != null) {
-                String[] info = line.split(",(?=([^\\\"]*\\\"[^\\\"]*\\\")*[^\\\"]*$)", -1);
-                Course course = new Course(info[0], info[1], new Date(info[2]), info[3], info[4], info[5],
-                        Integer.parseInt(info[6]), Integer.parseInt(info[7]), Integer.parseInt(info[8]),
-                        Integer.parseInt(info[9]), Integer.parseInt(info[10]), Double.parseDouble(info[11]),
-                        Double.parseDouble(info[12]), Double.parseDouble(info[13]), Double.parseDouble(info[14]),
-                        Double.parseDouble(info[15]), Double.parseDouble(info[16]), Double.parseDouble(info[17]),
-                        Double.parseDouble(info[18]), Double.parseDouble(info[19]), Double.parseDouble(info[20]),
-                        Double.parseDouble(info[21]), Double.parseDouble(info[22]));
-                courses.add(course);
-            }
+          br.close();
         } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (br != null) {
-                try {
-                    br.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+          e.printStackTrace();
+        }
+      }
+    }
+  }
+  //1
+
+  public Map<String, Integer> getPtcpCountByInst() {
+    Map<String, Integer> result = courses.stream().collect(Collectors.toMap(
+            Course::getInstitution,
+            Course::getParticipants,
+            Integer::sum
+    ));
+
+    return result.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    Map.Entry::getValue,
+                    (oldValue, newValue) -> oldValue,
+                    LinkedHashMap::new
+            ));
+  }
+
+  //2
+  public Map<String, Integer> getPtcpCountByInstAndSubject() {
+    Map<String, Integer> result = courses.stream()
+            .collect(Collectors.groupingBy(
+                    c -> c.getInstitution() + "-" + c.getSubject(),
+                    Collectors.summingInt(Course::getParticipants)
+            ));
+
+    return result.entrySet().stream()
+            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
+                    .thenComparing(Map.Entry.comparingByKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+                    (u, v) -> u, LinkedHashMap::new));
+  }
+
+  //3
+  public Map<String, List<List<String>>> getCourseListOfInstructor() {
+    Map<String, List<List<String>>> result = new HashMap<>();
+
+    // group courses by instructor
+    Map<String, List<Course>> coursesByInstructor = new HashMap<>();
+    for (Course course : courses) {
+      String[] instructors = course.getInstructor().split(",");
+      for (String instructor : instructors) {
+        instructor = instructor.trim();
+        List<Course> courseListForInstructor =
+                coursesByInstructor.computeIfAbsent(instructor, k -> new ArrayList<>());
+        courseListForInstructor.add(course);
+      }
+    }
+
+    // iterate through each instructor and group their courses by type
+    for (String instructor : coursesByInstructor.keySet()) {
+        List<Course> instructorCourses = coursesByInstructor.get(instructor);
+        List<Course> independentCourses = new ArrayList<>();
+        List<Course> coDevelopedCourses = new ArrayList<>();
+
+        for (Course course : instructorCourses) {
+            if (course.isIndependent()) {
+                if (!independentCourses.contains(course)) {
+                    independentCourses.add(course);
+                }
+            } else {
+                if (!coDevelopedCourses.contains(course)) {
+                    coDevelopedCourses.add(course);
                 }
             }
         }
+
+        // sort courses by title
+        independentCourses.sort(Comparator.comparing(Course::getTitle));
+        coDevelopedCourses.sort(Comparator.comparing(Course::getTitle));
+
+        // create course lists and add to result map
+        List<List<String>> courseLists = new ArrayList<>();
+        List<String> independentCourseTitles = independentCourses.stream().map(Course::getTitle).collect(Collectors.toList());
+        List<String> coDevelopedCourseTitles = coDevelopedCourses.stream().map(Course::getTitle).collect(Collectors.toList());
+        //
+        Set<String> setWithoutDuplicates1 = new LinkedHashSet<>(independentCourseTitles);
+        List<String> listWithoutDuplicates1 = new ArrayList<>(setWithoutDuplicates1);
+
+        Set<String> setWithoutDuplicates2 = new LinkedHashSet<>(coDevelopedCourseTitles);
+        List<String> listWithoutDuplicates2 = new ArrayList<>(setWithoutDuplicates2);
+
+        courseLists.add(listWithoutDuplicates1);
+        courseLists.add(listWithoutDuplicates2);
+        result.put(instructor, courseLists);
     }
 
-    //1
-    public Map<String, Integer> getPtcpCountByInst() {
-        Map<String, Integer> result = courses.stream().collect(Collectors.toMap(
-                Course::getInstitution,
-                Course::getParticipants,
-                Integer::sum
-        ));
-
-        return result.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (oldValue, newValue) -> oldValue,
-                        LinkedHashMap::new
-                ));
-    }
-
-    //2
-    public Map<String, Integer> getPtcpCountByInstAndSubject() {
-        Map<String, Integer> result = courses.stream()
-                .collect(Collectors.groupingBy(
-                        c -> c.getInstitution() + "-" + c.getSubject(),
-                        Collectors.summingInt(Course::getParticipants)
-                ));
-
-        return result.entrySet().stream()
-                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
-                        .thenComparing(Map.Entry.comparingByKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-                        (u, v) -> u, LinkedHashMap::new));
-    }
-
-    //3
-    public Map<String, List<List<String>>> getCourseListOfInstructor() {
-        Map<String, List<List<String>>> result = new HashMap<>();
-
-        // group courses by instructor
-        Map<String, List<Course>> coursesByInstructor = new HashMap<>();
-        for (Course course : courses) {
-            String[] instructors = course.getInstructor().split(",");
-            for (String instructor : instructors) {
-                instructor = instructor.trim();
-                List<Course> courseListForInstructor = coursesByInstructor.computeIfAbsent(instructor, k -> new ArrayList<>());
-                courseListForInstructor.add(course);
-            }
-        }
-
-        // iterate through each instructor and group their courses by type
-        for (String instructor : coursesByInstructor.keySet()) {
-            List<Course> instructorCourses = coursesByInstructor.get(instructor);
-            List<Course> independentCourses = new ArrayList<>();
-            List<Course> coDevelopedCourses = new ArrayList<>();
-
-            for (Course course : instructorCourses) {
-                if (course.isIndependent()) {
-                    if (!independentCourses.contains(course)) {
-                        independentCourses.add(course);
-                    }
-                } else {
-                    if (!coDevelopedCourses.contains(course)) {
-                        coDevelopedCourses.add(course);
-                    }
-                }
-            }
-
-            // sort courses by title
-            independentCourses.sort(Comparator.comparing(Course::getTitle));
-            coDevelopedCourses.sort(Comparator.comparing(Course::getTitle));
-
-            // create course lists and add to result map
-            List<List<String>> courseLists = new ArrayList<>();
-            List<String> independentCourseTitles = independentCourses.stream().map(Course::getTitle).collect(Collectors.toList());
-            List<String> coDevelopedCourseTitles = coDevelopedCourses.stream().map(Course::getTitle).collect(Collectors.toList());
-            //
-            Set<String> setWithoutDuplicates1 = new LinkedHashSet<>(independentCourseTitles);
-            List<String> listWithoutDuplicates1 = new ArrayList<>(setWithoutDuplicates1);
-
-            Set<String> setWithoutDuplicates2 = new LinkedHashSet<>(coDevelopedCourseTitles);
-            List<String> listWithoutDuplicates2 = new ArrayList<>(setWithoutDuplicates2);
-
-            courseLists.add(listWithoutDuplicates1);
-            courseLists.add(listWithoutDuplicates2);
-            result.put(instructor, courseLists);
-        }
-
-        return result;
-    }
+    return result;
+  }
 
     //4
     public List<String> getCourses(int topK, String by) {
@@ -201,7 +199,8 @@ public class OnlineCoursesAnalyzer {
 
     //6
     public List<String> recommendCourses(int age, int gender, int isBachelorOrHigher) {
-        // Step 1: Calculate the averages of Median Age, % Male, and % Bachelor's Degree or Higher for each course
+        // Step 1: Calculate the averages of Median Age, % Male,
+        // and % Bachelor's Degree or Higher for each course
         Map<String, Double[]> courseAverages = new HashMap<>();
 //        Set<Course> noDup = new HashSet<>(courses);
 //        List<Course> noDupCourses = new ArrayList<>(noDup);
